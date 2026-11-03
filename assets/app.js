@@ -6,11 +6,14 @@
 
 // Emojis Apple 160 px (dépôt iamcal/emoji-data), servis avec CORS pour que l'export PNG fonctionne.
 const EMOJI_CDN = 'https://cdn.jsdelivr.net/gh/iamcal/emoji-data@v16.0.0/img-apple-160/';
+// Vignettes 64 px pour le sélecteur (mêmes noms de fichiers).
+const EMOJI_THUMB_CDN = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@16.0.0/img/apple/64/';
 const FONT = '"TikTok Sans"';
 const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
 const VERTICAL = { w: 1080, h: 1920 };
 const STATE_KEY = 'texte-shorts:state';
 const HISTORY_KEY = 'texte-shorts:history';
+const RECENT_EMOJIS_KEY = 'texte-shorts:recent-emojis';
 
 const BG_COLORS = [
   ['Rouge', '#EA4040'], ['Bleu', '#3494F0'], ['Orange', '#FF933D'], ['Jaune', '#F2CD46'],
@@ -18,13 +21,12 @@ const BG_COLORS = [
   ['Blanc', '#FFFFFF'], ['Noir', '#000000'],
 ];
 
-const FAVORITE_EMOJIS = [
+// La barre « Récents » avant le premier emoji choisi : les plus courants en fin de titre.
+const DEFAULT_RECENT_EMOJIS = [
   '💀', '😳', '🤣', '😭', '❌', '🤑', '🤯', '😱',
   '🔥', '😂', '😵‍💫', '🥶', '😡', '🫣', '🤔', '😎',
-  '🥵', '😈', '👀', '💸', '💰', '🏆', '⚠️', '✅',
-  '🚨', '🤡', '🙏', '😍', '🥹', '😏', '🤩', '🗿',
-  '💯', '❤️', '🎮', '🚗', '😴', '🫡', '👑', '💥',
 ];
+const RECENT_EMOJIS_MAX = 16;
 
 // Proportions mesurées sur les titres TikTok (en em = taille de police).
 const LAYOUT_DEFAULTS = {
@@ -80,6 +82,7 @@ const store = {
 const state = { ...DEFAULTS, ...store.get(STATE_KEY, {}) };
 if (state.previewBg === 'image') state.previewBg = 'checker';
 let recents = store.get(HISTORY_KEY, []);
+let recentEmojis = store.get(RECENT_EMOJIS_KEY, DEFAULT_RECENT_EMOJIS);
 let activeSlot = 'emoji1';
 let previewImageUrl = null;
 let dirHandle = null;
@@ -506,8 +509,14 @@ async function exportPNG() {
     await assetsReady();
     const canvas = exportCanvas();
     if (!canvas) return toast('Écris un titre d’abord', true);
-    const blob = await toBlob(canvas);
     const name = fileName();
+    if (nativeApi()) {
+      const saved = await nativeApi().save_png(name, canvas.toDataURL('image/png').split(',')[1]);
+      toast(`Enregistré dans ${saved.folder} : ${saved.name}`);
+      addHistory();
+      return;
+    }
+    const blob = await toBlob(canvas);
     if (dirHandle) {
       try {
         const saved = await saveToFolder(blob, name);
@@ -569,6 +578,21 @@ async function saveToFolder(blob, name) {
   return finalName;
 }
 
+// Dans l'appli Windows (main.py), c'est Python qui enregistre les PNG et retient le dossier.
+const nativeApi = () => window.pywebview && window.pywebview.api;
+let nativeFolder = null;
+
+async function setupNative() {
+  if (nativeFolder || !nativeApi()) return;
+  nativeFolder = await nativeApi().get_folder();
+  $('.tb-block.folder').hidden = false;
+  $('#folderOpen').hidden = false;
+  const canvas = $('#canvas');
+  canvas.draggable = false;
+  canvas.removeAttribute('title');
+  updateFolderUI();
+}
+
 // Petit coffre IndexedDB pour se souvenir du dossier d'export entre deux sessions.
 const idb = {
   open() {
@@ -594,12 +618,25 @@ const idb = {
 };
 
 function updateFolderUI() {
+  if (nativeFolder) {
+    $('#folderName').textContent = nativeFolder.name;
+    $('#folderReset').hidden = nativeFolder.isDefault;
+    return;
+  }
   $('#folderName').textContent = dirHandle ? dirHandle.name : 'Téléchargements';
   $('#folderReset').hidden = !dirHandle;
 }
 
 async function chooseFolder() {
   try {
+    if (nativeApi()) {
+      const info = await nativeApi().choose_folder();
+      if (!info) return;
+      nativeFolder = info;
+      updateFolderUI();
+      toast(`Les PNG iront dans « ${info.name} »`);
+      return;
+    }
     dirHandle = await window.showDirectoryPicker({ id: 'texte-shorts', mode: 'readwrite' });
     await idb.set('dir', dirHandle).catch(() => {});
     updateFolderUI();
@@ -720,26 +757,179 @@ function buildSwatches() {
   $('#customBg').addEventListener('input', e => setState({ bg: e.target.value.toUpperCase() }));
 }
 
-function buildEmojiGrid() {
-  const grid = $('#emojiGrid');
-  for (const g of FAVORITE_EMOJIS) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.title = g;
-    const img = new Image();
-    img.alt = g;
-    img.src = EMOJI_CDN + emojiFileCandidates(g)[0] + '.png';
-    img.onerror = () => { b.textContent = g; b.classList.add('native'); };
-    b.append(img);
-    b.addEventListener('mousedown', e => e.preventDefault());
-    b.addEventListener('click', () => pickEmoji(g));
-    grid.append(b);
+/* ------------------------------------------------------ Sélecteur d'emojis */
+
+// Icônes au trait des onglets (24×24), dans l'ordre des catégories d'EMOJI_GROUPS.
+const EMOJI_TAB_ICONS = [
+  '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1 1.3 2.2 2 3.5 2s2.5-.7 3.5-2"/><path d="M9 9.5v.5M15 9.5v.5"/>',
+  '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/>',
+  '<path d="M12 13c-2.8 0-5 2.4-5 4.4 0 1.5 1.2 2.6 2.8 2.6.9 0 1.5-.4 2.2-.4s1.3.4 2.2.4c1.6 0 2.8-1.1 2.8-2.6 0-2-2.2-4.4-5-4.4z"/><circle cx="6" cy="10.5" r="1.6"/><circle cx="9.5" cy="6.5" r="1.6"/><circle cx="14.5" cy="6.5" r="1.6"/><circle cx="18" cy="10.5" r="1.6"/>',
+  '<path d="M7 3v18M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3"/><path d="M17.5 21V3c-2 0-3.5 2.2-3.5 5.5V13h3.5"/>',
+  '<path d="M4 16v-3.5l2-5A2 2 0 0 1 7.9 6h8.2a2 2 0 0 1 1.9 1.5l2 5V16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 12.5h16"/><path d="M6.5 17v2M17.5 17v2"/>',
+  '<circle cx="12" cy="12" r="9"/><path d="M5.7 5.6c3 3.2 3 9.6 0 12.8M18.3 5.6c-3 3.2-3 9.6 0 12.8"/>',
+  '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.8 10.6c.6.5.8 1.3.8 2.1V16h6v-.3c0-.8.3-1.6.8-2.1A6 6 0 0 0 12 3z"/>',
+  '<path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/>',
+  '<path d="M5 21V4"/><path d="M5 4h12l-2.5 4.5L17 13H5"/>',
+];
+
+const plain = s => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const EMOJI_INDEX = EMOJI_GROUPS.flatMap(([, items]) =>
+  items.map(([g, name, search]) => ({ g, name, search: ` ${search}`, label: plain(name) })));
+const EMOJI_NAMES = new Map(EMOJI_INDEX.map(e => [e.g, e.name]));
+
+// Les vignettes ne se chargent qu'en approchant de la partie visible de leur liste.
+function lazyLoader(root) {
+  return new IntersectionObserver((entries, observer) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      entry.target.src = entry.target.dataset.src;
+      observer.unobserve(entry.target);
+    }
+  }, { root, rootMargin: '240px 0px' });
+}
+
+function emojiButton(g, loader) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.dataset.emoji = g;
+  b.title = EMOJI_NAMES.get(g) || g;
+  const img = document.createElement('img');
+  img.alt = '';
+  img.onerror = () => { img.remove(); b.textContent = g; b.classList.add('native'); };
+  const src = EMOJI_THUMB_CDN + emojiFileCandidates(g)[0] + '.png';
+  if (loader) {
+    img.dataset.src = src;
+    loader.observe(img);
+  } else {
+    img.src = src;
   }
+  b.append(img);
+  return b;
+}
+
+function buildEmojiPicker() {
+  const list = $('#emojiList');
+  const tabs = $('#emojiTabs');
+  const loader = lazyLoader(list);
+  const sections = EMOJI_GROUPS.map(([label, items], i) => {
+    const section = document.createElement('section');
+    const title = document.createElement('h4');
+    title.textContent = label;
+    const grid = document.createElement('div');
+    grid.className = 'emoji-grid';
+    grid.append(...items.map(([g]) => emojiButton(g, loader)));
+    section.append(title, grid);
+
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.title = label;
+    tab.setAttribute('aria-label', label);
+    tab.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${EMOJI_TAB_ICONS[i]}</svg>`;
+    tab.addEventListener('click', () => { list.scrollTop = section.offsetTop; });
+    tabs.append(tab);
+    return section;
+  });
+  list.append(...sections);
+
+  const markTab = () => {
+    let current = 0;
+    sections.forEach((s, i) => { if (s.offsetTop <= list.scrollTop + 8) current = i; });
+    [...tabs.children].forEach((t, i) => t.classList.toggle('on', i === current));
+  };
+  list.addEventListener('scroll', markTab, { passive: true });
+  markTab();
+
+  // Un clic sur n'importe quel emoji (récents, liste, résultats) le place dans la case active.
+  const picker = list.closest('.group');
+  picker.addEventListener('mousedown', e => { if (e.target.closest('[data-emoji]')) e.preventDefault(); });
+  picker.addEventListener('click', e => {
+    const b = e.target.closest('[data-emoji]');
+    if (b) pickEmoji(b.dataset.emoji);
+  });
+  // La barre des récents ne se réordonne pas sous la souris : seulement une fois qu'on en sort.
+  picker.addEventListener('mouseenter', () => { pickerHovered = true; });
+  picker.addEventListener('mouseleave', () => {
+    pickerHovered = false;
+    if (recentsDirty) renderRecentEmojis();
+  });
+
+  const search = $('#emojiSearch');
+  search.addEventListener('input', () => renderEmojiResults(search.value));
+  search.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      search.value = '';
+      renderEmojiResults('');
+    } else if (e.key === 'Enter') {
+      const first = $('#emojiResults [data-emoji]');
+      if (first) pickEmoji(first.dataset.emoji);
+    }
+  });
+  renderRecentEmojis();
+}
+
+let pickerHovered = false;
+let recentsDirty = false;
+
+function renderRecentEmojis() {
+  recentsDirty = false;
+  $('#emojiRecent').replaceChildren(...recentEmojis.map(g => emojiButton(g)));
+}
+
+function rememberEmoji(g) {
+  if (!g || !isEmoji(g)) return;
+  recentEmojis = [g, ...recentEmojis.filter(x => x !== g)].slice(0, RECENT_EMOJIS_MAX);
+  store.set(RECENT_EMOJIS_KEY, recentEmojis);
+  if (pickerHovered) recentsDirty = true;
+  else renderRecentEmojis();
+}
+
+function searchEmojis(query) {
+  const words = plain(query).trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const full = words.join(' ');
+  const rank = e => {
+    if (e.label === full) return 0;
+    if (e.label.startsWith(full)) return 1;
+    return words.every(w => e.search.includes(` ${w}`)) ? 2 : 3;
+  };
+  return EMOJI_INDEX
+    .filter(e => e.g === query.trim() || words.every(w => e.search.includes(w)))
+    .map(e => ({ e, r: rank(e) }))
+    .sort((a, b) => a.r - b.r)
+    .slice(0, 240)
+    .map(x => x.e);
+}
+
+let resultsLoader = null;
+function renderEmojiResults(query) {
+  const results = $('#emojiResults');
+  const searching = query.trim().length > 0;
+  $('#emojiBrowse').hidden = searching;
+  $('#emojiList').hidden = searching;
+  results.hidden = !searching;
+  if (!searching) return;
+
+  if (resultsLoader) resultsLoader.disconnect();
+  resultsLoader = lazyLoader(results);
+  const found = searchEmojis(query);
+  if (!found.length) {
+    const empty = document.createElement('p');
+    empty.className = 'emoji-empty';
+    empty.textContent = 'Aucun emoji trouvé';
+    results.replaceChildren(empty);
+    return;
+  }
+  const grid = document.createElement('div');
+  grid.className = 'emoji-grid';
+  grid.append(...found.map(e => emojiButton(e.g, resultsLoader)));
+  results.replaceChildren(grid);
+  results.scrollTop = 0;
 }
 
 function pickEmoji(g) {
   const slot = activeSlot;
   if (slot === 'emoji1') activeSlot = 'emoji2';
+  rememberEmoji(g);
   setState({ [slot]: g });
 }
 
@@ -757,6 +947,7 @@ function bindControls() {
         v = gs.length ? gs[gs.length - 1] : '';
         el.value = v;
         if (v && key === 'emoji1' && !state.emoji2) activeSlot = 'emoji2';
+        rememberEmoji(v);
       }
       if (key === 'shadowColor') v = v.toUpperCase();
       setState({ [key]: v }, el);
@@ -798,16 +989,19 @@ function bindControls() {
 
   $('#exportBtn').addEventListener('click', exportPNG);
   $('#copyBtn').addEventListener('click', copyPNG);
-  if ('showDirectoryPicker' in window) {
-    $('#folderBtn').addEventListener('click', chooseFolder);
-    $('#folderReset').addEventListener('click', async () => {
+  $('#folderBtn').addEventListener('click', chooseFolder);
+  $('#folderReset').addEventListener('click', async () => {
+    if (nativeApi()) {
+      nativeFolder = await nativeApi().reset_folder();
+    } else {
       dirHandle = null;
       await idb.del('dir').catch(() => {});
-      updateFolderUI();
-    });
-  } else {
-    $('.tb-block.folder').hidden = true;
-  }
+    }
+    updateFolderUI();
+  });
+  $('#folderOpen').addEventListener('click', () => nativeApi() && nativeApi().open_folder());
+  $('.tb-block.folder').hidden = !('showDirectoryPicker' in window);
+  window.addEventListener('pywebviewready', setupNative);
 
   // Glisser l'aperçu vers l'Explorateur crée directement le PNG.
   $('#canvas').addEventListener('dragstart', e => {
@@ -861,7 +1055,7 @@ function toast(msg, error = false) {
 
 async function init() {
   buildSwatches();
-  buildEmojiGrid();
+  buildEmojiPicker();
   bindControls();
   syncControls();
   renderHistory();
@@ -871,6 +1065,7 @@ async function init() {
     dirHandle = null;
   }
   updateFolderUI();
+  setupNative();
   await document.fonts.load(fontString(state.weight, 80), 'AaÉé’').catch(() => {});
   renderPreview();
   document.fonts.addEventListener('loadingdone', scheduleRender);

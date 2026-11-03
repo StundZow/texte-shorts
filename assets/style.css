@@ -37,6 +37,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
   border-right: 1px solid var(--line);
   overflow-y: auto;
   padding: 18px 18px 40px;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a40 transparent;
 }
 
 .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
@@ -112,7 +114,7 @@ kbd {
 
 .emoji-grid {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 2px;
 }
 .emoji-grid button {
@@ -126,6 +128,46 @@ kbd {
 .emoji-grid button:hover { background: var(--panel-2); }
 .emoji-grid img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .emoji-grid .native { font-size: 22px; font-family: 'Segoe UI Emoji', sans-serif; }
+
+.emoji-search {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  outline: none;
+}
+.emoji-search:focus { border-color: var(--accent); }
+.emoji-subtitle, .emoji-list h4 {
+  font-size: 11px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 4px;
+}
+.emoji-tabs {
+  display: grid; grid-template-columns: repeat(9, 1fr); gap: 2px;
+  margin: 10px 0 4px; padding-top: 8px; border-top: 1px solid var(--line);
+}
+.emoji-tabs button {
+  border: 0; background: transparent; border-radius: 7px; padding: 6px 0; cursor: pointer;
+  color: #6c6c75; display: grid; place-items: center; transition: color .12s, background .12s;
+}
+.emoji-tabs button:hover { color: #c4c4cb; }
+.emoji-tabs button.on { color: var(--text); background: var(--panel-2); }
+.emoji-tabs svg {
+  width: 20px; height: 20px;
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.emoji-list {
+  position: relative;
+  height: 252px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a40 transparent;
+  margin-right: -6px; padding-right: 6px;
+}
+.emoji-list h4 { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 6px 2px 4px; }
+.emoji-list section + section { margin-top: 6px; }
+.emoji-empty { color: var(--muted); font-size: 13px; text-align: center; margin: 40px 0; }
 
 /* Couleurs */
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -262,6 +304,7 @@ button.primary:hover { filter: brightness(1.08); }
 .frame.vertical { box-shadow: 0 0 0 1px rgba(255,255,255,.15), 0 10px 40px rgba(0,0,0,.5); }
 #canvas { display: block; cursor: grab; }
 #canvas:active { cursor: grabbing; }
+#canvas[draggable="false"] { cursor: default; }
 
 .checker {
   background-color: #2a2a2e;

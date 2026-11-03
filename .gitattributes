@@ -1,3 +1,4 @@
 *.bat text eol=crlf
 *.ps1 text eol=crlf
 assets/fonts.css -diff linguist-generated
+assets/emojis.js -diff linguist-generated

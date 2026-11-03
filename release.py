@@ -1,33 +1,36 @@
-"""Prépare l'archive de l'appli, tague la version et publie la release sur GitHub.
+"""Construit TexteShorts.exe, tague la version et publie la release sur GitHub.
 
 Usage :
-    python release.py 1.1 "- Nouveauté\n- Correction"
+    python release.py 1.2 "- Nouveauté\n- Correction"
+    python release.py --build      (construit seulement l'exe, sans publier)
 
-Nécessite GitHub CLI (`gh`) installé et authentifié (`gh auth login`).
+Nécessite PyInstaller et pywebview (`pip install -r requirements.txt`), et GitHub CLI (`gh`)
+installé et authentifié (`gh auth login`) pour publier.
 """
 from __future__ import annotations
 
 import shutil
 import subprocess
 import sys
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-ARCHIVE = ROOT / "dist" / "TexteShorts.zip"
+EXE = ROOT / "dist" / "TexteShorts.exe"
 
-# Ce que reçoit l'utilisateur : l'appli, son lanceur, et la police avec sa licence.
-CONTENT = [
-    "index.html",
-    "Lancer Texte Shorts.bat",
-    "tools/launch.ps1",
-    "assets/app.js",
-    "assets/style.css",
-    "assets/fonts.css",
-    "assets/icon.ico",
-    "assets/icon.png",
-    "assets/fonts/OFL.txt",
+# Les fichiers de la page, embarqués dans l'exe (chemin source, dossier dans l'exe).
+DATA = [
+    ("index.html", "."),
+    ("assets/app.js", "assets"),
+    ("assets/emojis.js", "assets"),
+    ("assets/style.css", "assets"),
+    ("assets/fonts.css", "assets"),
+    ("assets/icon.ico", "assets"),
+    ("assets/icon.png", "assets"),
+    ("assets/fonts/OFL.txt", "assets/fonts"),
 ]
+
+# pywebview n'utilise ici que WinForms + WebView2 : les autres moteurs n'ont rien à faire dans l'exe.
+EXCLUDED_MODULES = ["tkinter", "numpy", "PIL", "PySide6", "PyQt5", "PyQt6", "qtpy", "gi", "cefpython3"]
 
 GH_FALLBACKS = [r"C:\Program Files\GitHub CLI\gh.exe"]
 
@@ -49,18 +52,29 @@ def run(cmd: list[str]) -> None:
 
 
 def build() -> Path:
-    ARCHIVE.parent.mkdir(exist_ok=True)
-    with zipfile.ZipFile(ARCHIVE, "w", zipfile.ZIP_DEFLATED) as zf:
-        for rel in CONTENT:
-            zf.write(ROOT / rel, f"Texte Shorts/{rel}")
-    print(f"{ARCHIVE.relative_to(ROOT)} : {ARCHIVE.stat().st_size // 1024} Ko")
-    return ARCHIVE
+    cmd = [
+        sys.executable, "-m", "PyInstaller", "main.py",
+        "--noconfirm", "--clean", "--onefile", "--windowed",
+        "--name", EXE.stem,
+        "--icon", str(ROOT / "assets" / "icon.ico"),
+        "--distpath", str(EXE.parent), "--workpath", str(ROOT / "build"), "--specpath", str(ROOT / "build"),
+    ]
+    for src, dest in DATA:
+        cmd += ["--add-data", f"{ROOT / src};{dest}"]
+    for module in EXCLUDED_MODULES:
+        cmd += ["--exclude-module", module]
+    run(cmd)
+    print(f"{EXE.relative_to(ROOT)} : {EXE.stat().st_size / 1e6:.1f} Mo")
+    return EXE
 
 
 def main() -> None:
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)
+    if sys.argv[1] == "--build":
+        build()
+        return
     tag = "v" + sys.argv[1].lstrip("v")
     notes = sys.argv[2].replace("\\n", "\n") if len(sys.argv) > 2 else f"Texte Shorts {tag}"
     gh = find_gh()
@@ -70,10 +84,10 @@ def main() -> None:
         print("Des modifications ne sont pas commitées : commite-les avant de publier.")
         sys.exit(1)
 
-    archive = build()
+    exe = build()
     run(["git", "tag", tag])
     run(["git", "push", "origin", "HEAD", tag])
-    run([gh, "release", "create", tag, str(archive), "--title", f"Texte Shorts {tag}", "--notes", notes])
+    run([gh, "release", "create", tag, str(exe), "--title", f"Texte Shorts {tag}", "--notes", notes])
 
 
 if __name__ == "__main__":

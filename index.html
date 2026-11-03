@@ -35,8 +35,15 @@
         </div>
         <label class="check"><input type="checkbox" data-key="spaceBeforeEmoji"> Espace avant</label>
       </div>
-      <div class="emoji-grid" id="emojiGrid"></div>
-      <p class="hint">Clique une case puis un emoji. Pour tous les autres : <kbd>Win</kbd> + <kbd>.</kbd></p>
+      <input type="search" id="emojiSearch" class="emoji-search" placeholder="Rechercher : crâne, rire, feu…" autocomplete="off" spellcheck="false">
+      <div id="emojiBrowse">
+        <div class="emoji-subtitle">Récents</div>
+        <div class="emoji-grid" id="emojiRecent"></div>
+        <div class="emoji-tabs" id="emojiTabs"></div>
+      </div>
+      <div class="emoji-list" id="emojiList"></div>
+      <div class="emoji-list" id="emojiResults" hidden></div>
+      <p class="hint">Clique une case puis un emoji (ou tape-le avec <kbd>Win</kbd> + <kbd>.</kbd>).</p>
     </section>
 
     <section class="group">
@@ -132,6 +139,7 @@
       <div class="tb-block folder">
         <button type="button" class="ghost" id="folderBtn" title="Enregistrer directement dans un dossier">Dossier : <span id="folderName">Téléchargements</span></button>
         <button type="button" class="link" id="folderReset" hidden title="Revenir aux Téléchargements">×</button>
+        <button type="button" class="link" id="folderOpen" hidden title="Ouvrir le dossier dans l'Explorateur">Ouvrir</button>
       </div>
       <button type="button" class="ghost" id="copyBtn" title="Ctrl+Maj+C">Copier</button>
       <button type="button" class="primary" id="exportBtn" title="Ctrl+S">Exporter PNG</button>
@@ -139,6 +147,7 @@
   </main>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="assets/emojis.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>

@@ -1,12 +1,12 @@
 """Génère l'icône de l'appli à partir de son dessin vectoriel : `assets/icon.ico` (toutes les
-tailles qu'utilise Windows, pour le raccourci), `assets/icon.png` (onglet et en-tête de l'appli)
-et `icon.png` à la racine (README).
+tailles qu'utilise Windows, pour l'exe et le raccourci), `assets/icon.png` (onglet et en-tête de
+l'appli) et `icon.png` à la racine (README).
 
-Le dessin : une tuile sombre et un « T » d'outil texte blanc posé sur un sticker rouge, soit
-exactement un titre TikTok (texte blanc sur fond rouge). Le contour du sticker reprend la forme
-en escalier que dessine l'appli : une ligne large, une plus courte, raccords arrondis. Le tout
-penche un peu, avec deux étincelles jaunes. Jusqu'à 24 px, une variante simplifiée (droite, plus
-grande, sans étincelles, tuile bord à bord) reste nette. À relancer après toute retouche :
+Le dessin : une tuile pleine en dégradé orange → rouge (les couleurs des titres) et, posé un peu
+de travers, un badge blanc en escalier comme ceux que dessine l'appli (une ligne large, une plus
+courte, raccords arrondis). Dedans, deux lignes de « texte » et un point jaune pour l'emoji de fin ;
+deux étincelles en haut à droite. Jusqu'à 24 px, une variante simplifiée (droite, plus grande,
+sans étincelles, tuile bord à bord) reste nette. À relancer après toute retouche du dessin :
 
     python tools/make_icon.py
 """
@@ -24,9 +24,8 @@ from PySide6.QtSvg import QSvgRenderer
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
 
-TILE_TOP, TILE_BOTTOM = "#2B2B33", "#141418"
-RED_TOP, RED_BOTTOM = "#FF6A4D", "#E8304F"
-SPARK, SPARK_SOFT = "#FFD54A", "#FFE9A6"
+TOP_LEFT, BOTTOM_RIGHT = "#FF8A3D", "#E8304F"
+EMOJI = "#FFC93C"
 ICO_SIZES = (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
 SMALL_MAX = 24
 PNG_SIZE = 512
@@ -50,24 +49,25 @@ def rounded(points: list[tuple[float, float]], r: float) -> str:
     return "".join(d) + "Z"
 
 
-def t_outline(cx: float, top: float, bar_w: float, bar_h: float, stem_w: float, height: float, pad: float) -> list:
-    """Silhouette d'un T, élargie de `pad` tout autour (pad = 0 : le T lui-même)."""
-    x0, x1 = cx - bar_w / 2 - pad, cx + bar_w / 2 + pad
-    s0, s1 = cx - stem_w / 2 - pad, cx + stem_w / 2 + pad
-    y0, y1, y2 = top - pad, top + bar_h + pad, top + height + pad
-    return [(x0, y0), (x1, y0), (x1, y1), (s1, y1), (s1, y2), (s0, y2), (s0, y1), (x0, y1)]
+def title_badge(cx: float, cy: float, top_w: float, bottom_w: float, row_h: float, r: float,
+                top_line: tuple[float, float], bottom_line: tuple[float, float], line_h: float,
+                dot_x: float, dot_r: float, rot: float) -> str:
+    """Le badge à deux lignes centré en (cx, cy), une ligne de « texte » dans chaque rangée
+    (bornes x données) et le point emoji au bout de la seconde, le tout tourné de `rot` degrés."""
+    y0, y1, y2 = cy - row_h, cy, cy + row_h
+    badge = rounded([
+        (cx - top_w / 2, y0), (cx + top_w / 2, y0), (cx + top_w / 2, y1),
+        (cx + bottom_w / 2, y1), (cx + bottom_w / 2, y2), (cx - bottom_w / 2, y2),
+        (cx - bottom_w / 2, y1), (cx - top_w / 2, y1),
+    ], r)
 
+    def line(x0: float, x1: float, y: float) -> str:
+        return f'<rect x="{x0}" y="{y - line_h / 2}" width="{x1 - x0}" height="{line_h}" rx="{line_h / 2}" fill="url(#bg)"/>'
 
-def sticker(cx: float, cy: float, scale: float, rot: float) -> str:
-    bar_w, bar_h, stem_w, height = 520 * scale, 160 * scale, 180 * scale, 470 * scale
-    pad = 64 * scale
-    top = cy - height / 2
-    letter = rounded(t_outline(cx, top, bar_w, bar_h, stem_w, height, 0), 24 * scale)
-    badge = rounded(t_outline(cx, top, bar_w, bar_h, stem_w, height, pad), 80 * scale)
     return (
-        f'<g transform="rotate({rot} {cx} {cy})">'
-        f'<path d="{badge}" fill="#000" fill-opacity="0.22" transform="translate(0 {26 * scale})"/>'
-        f'<path d="{badge}" fill="url(#red)"/><path d="{letter}" fill="#fff"/></g>'
+        f'<g transform="rotate({rot} {cx} {cy})"><path d="{badge}" fill="#fff"/>'
+        f'{line(*top_line, cy - row_h / 2)}{line(*bottom_line, cy + row_h / 2)}'
+        f'<circle cx="{dot_x}" cy="{cy + row_h / 2}" r="{dot_r}" fill="{EMOJI}"/></g>'
     )
 
 
@@ -82,17 +82,23 @@ def sparkle(cx: float, cy: float, size: float) -> str:
 
 
 ICON = (
-    sticker(470, 500, 1, -8)
-    + f'<path d="{sparkle(790, 740, 92)}" fill="{SPARK}"/>'
-    + f'<path d="{sparkle(880, 612, 38)}" fill="{SPARK_SOFT}"/>'
+    title_badge(500, 530, 700, 440, 176, 62, (250, 750), (345, 545), 62, 608, 40, -6)
+    + f'<path d="{sparkle(836, 236, 86)}" fill="#fff"/>'
+    + f'<path d="{sparkle(700, 168, 36)}" fill="url(#w45)"/>'
 )
 
-SMALL = sticker(512, 500, 1.22, 0)
+SMALL = title_badge(512, 512, 900, 600, 230, 70, (170, 854), (300, 600), 92, 682, 58, 0)
 
 
-def gradient(gid: str, start: str, end: str, a: int, b: int) -> str:
+def lighten(color: str, amount: float) -> str:
+    rgb = [int(color[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(c + (255 - c) * amount):02x}" for c in rgb)
+
+
+def gradient(gid: str, start: str, end: str, inset: int) -> str:
+    far = 1024 - inset
     return (
-        f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" x1="{a}" y1="{a}" x2="{b}" y2="{b}">'
+        f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" x1="{inset}" y1="{inset}" x2="{far}" y2="{far}">'
         f'<stop offset="0" stop-color="{start}"/><stop offset="1" stop-color="{end}"/></linearGradient>'
     )
 
@@ -104,9 +110,9 @@ def svg(glyph: str, inset: int = 32) -> str:
     radius = round(side * 0.233)
     tile = f'<rect x="{inset}" y="{inset}" width="{side}" height="{side}" rx="{radius}"'
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><defs>
-{gradient("bg", TILE_TOP, TILE_BOTTOM, inset, 1024 - inset)}{gradient("red", RED_TOP, RED_BOTTOM, 200, 800)}
+{gradient("bg", TOP_LEFT, BOTTOM_RIGHT, inset)}{gradient("w45", lighten(TOP_LEFT, .45), lighten(BOTTOM_RIGHT, .45), inset)}
 <radialGradient id="sheen" gradientUnits="userSpaceOnUse" cx="260" cy="120" r="900">
-<stop offset="0" stop-color="#fff" stop-opacity="0.10"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+<stop offset="0" stop-color="#fff" stop-opacity="0.16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
 </radialGradient></defs>
 {tile} fill="url(#bg)"/>{glyph}{tile} fill="url(#sheen)"/></svg>"""
 
