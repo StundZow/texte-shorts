@@ -69,6 +69,8 @@ def build() -> Path:
 
 
 def main() -> None:
+    # La console Windows (cp1252) ne sait pas afficher tous les caractères des notes (→, emojis…).
+    sys.stdout.reconfigure(errors="replace")
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)
