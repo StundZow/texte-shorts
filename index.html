@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Texte Shorts</title>
+  <link rel="icon" href="assets/icon.png">
+  <link rel="stylesheet" href="assets/fonts.css">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <header class="brand">
+      <img src="assets/icon.png" alt="" class="logo">
+      <h1>Texte Shorts</h1>
+    </header>
+
+    <section class="group">
+      <label class="group-title" for="text">Texte</label>
+      <textarea id="text" data-key="text" rows="3" spellcheck="true" placeholder="Ton titre ici…"></textarea>
+      <p class="hint">Les lignes se coupent toutes seules. Entrée = retour à la ligne forcé.</p>
+    </section>
+
+    <section class="group">
+      <div class="group-title">Emojis à la fin</div>
+      <div class="emoji-slots">
+        <div class="slot" data-slot="emoji1">
+          <input id="emoji1" data-key="emoji1" maxlength="16" autocomplete="off" aria-label="Emoji 1">
+          <button class="slot-clear" type="button" data-clear="emoji1" title="Retirer">×</button>
+        </div>
+        <div class="slot" data-slot="emoji2">
+          <input id="emoji2" data-key="emoji2" maxlength="16" autocomplete="off" aria-label="Emoji 2">
+          <button class="slot-clear" type="button" data-clear="emoji2" title="Retirer">×</button>
+        </div>
+        <label class="check"><input type="checkbox" data-key="spaceBeforeEmoji"> Espace avant</label>
+      </div>
+      <div class="emoji-grid" id="emojiGrid"></div>
+      <p class="hint">Clique une case puis un emoji. Pour tous les autres : <kbd>Win</kbd> + <kbd>.</kbd></p>
+    </section>
+
+    <section class="group">
+      <div class="group-title" id="bgTitle">Couleur du fond</div>
+      <div class="swatches" id="bgSwatches"></div>
+      <div class="group-title sub">Couleur du texte</div>
+      <div class="seg" id="textColorSeg">
+        <button type="button" data-tc="auto">Auto</button>
+        <button type="button" data-tc="#FFFFFF">Blanc</button>
+        <button type="button" data-tc="#000000">Noir</button>
+        <label class="seg-color" title="Couleur perso"><input type="color" id="textColorPick"><span>Perso</span></label>
+      </div>
+    </section>
+
+    <section class="group">
+      <div class="group-title row">
+        <span>Ombre portée</span>
+        <label class="switch"><input type="checkbox" data-key="shadow"><span></span></label>
+      </div>
+      <div class="sliders" id="shadowControls">
+        <div class="ctrl"><label>Opacité</label><input type="range" data-key="shadowOpacity" min="0" max="100" step="1"><output data-for="shadowOpacity" data-unit="%"></output></div>
+        <div class="ctrl"><label>Flou</label><input type="range" data-key="shadowBlur" min="0" max="60" step="1"><output data-for="shadowBlur" data-unit="px"></output></div>
+        <div class="ctrl"><label>Distance</label><input type="range" data-key="shadowDistance" min="0" max="40" step="1"><output data-for="shadowDistance" data-unit="px"></output></div>
+        <div class="ctrl"><label>Direction</label><input type="range" data-key="shadowAngle" min="0" max="359" step="1"><output data-for="shadowAngle" data-unit="°"></output></div>
+        <div class="ctrl"><label>Couleur</label><input type="color" data-key="shadowColor" class="color-inline"></div>
+      </div>
+    </section>
+
+    <details class="group" id="layoutGroup">
+      <summary class="group-title">Mise en page</summary>
+      <div class="seg seg-full" id="styleSeg">
+        <button type="button" data-style="box">Avec fond</button>
+        <button type="button" data-style="none">Sans fond</button>
+      </div>
+      <div class="sliders">
+        <div class="ctrl"><label>Taille du texte</label><input type="range" data-key="fontSize" min="30" max="160" step="1"><output data-for="fontSize" data-unit="px"></output></div>
+        <div class="ctrl"><label>Épaisseur</label><input type="range" data-key="weight" min="300" max="900" step="10"><output data-for="weight"></output></div>
+        <div class="ctrl"><label>Largeur max</label><input type="range" data-key="maxWidth" min="250" max="1060" step="5"><output data-for="maxWidth" data-unit="px"></output></div>
+        <label class="check"><input type="checkbox" data-key="wrap"> Retour à la ligne automatique</label>
+        <div class="ctrl"><label>Interligne</label><input type="range" data-key="lineHeight" min="0.9" max="1.8" step="0.01"><output data-for="lineHeight"></output></div>
+        <div class="ctrl"><label>Marge côtés</label><input type="range" data-key="padX" min="0" max="1" step="0.01"><output data-for="padX" data-unit="em"></output></div>
+        <div class="ctrl"><label>Marge haut/bas</label><input type="range" data-key="padY" min="0" max="0.8" step="0.01"><output data-for="padY" data-unit="em"></output></div>
+        <div class="ctrl"><label>Arrondi</label><input type="range" data-key="radius" min="0" max="0.6" step="0.01"><output data-for="radius" data-unit="em"></output></div>
+        <div class="ctrl"><label>Taille emojis</label><input type="range" data-key="emojiSize" min="0.6" max="1.6" step="0.01"><output data-for="emojiSize" data-unit="em"></output></div>
+      </div>
+      <button type="button" class="ghost" id="resetLayout">Réglages par défaut</button>
+    </details>
+
+    <section class="group" id="historyGroup" hidden>
+      <div class="group-title row"><span>Récents</span><button type="button" class="link" id="clearHistory">Effacer</button></div>
+      <div class="history" id="history"></div>
+    </section>
+  </aside>
+
+  <main class="stage">
+    <div class="toolbar">
+      <div class="tb-block">
+        <span class="tb-label">Aperçu</span>
+        <div class="seg small" id="previewBgSeg">
+          <button type="button" data-pbg="checker" title="Damier (transparent)">Damier</button>
+          <button type="button" data-pbg="dark">Sombre</button>
+          <button type="button" data-pbg="light">Clair</button>
+          <button type="button" data-pbg="image" id="pbgImageBtn" title="Mettre une capture de ta vidéo derrière">Image…</button>
+        </div>
+        <input type="file" id="pbgFile" accept="image/*" hidden>
+      </div>
+      <div class="tb-block">
+        <span class="tb-label">Format PNG</span>
+        <div class="seg small" id="frameSeg">
+          <button type="button" data-frame="fit" title="PNG recadré au plus juste autour du titre">Ajusté</button>
+          <button type="button" data-frame="vertical" title="PNG 1080×1920 transparent, titre déjà placé">1080×1920</button>
+        </div>
+        <div class="ctrl inline" id="posYCtrl"><label>Hauteur</label><input type="range" data-key="posY" min="5" max="95" step="1"><output data-for="posY" data-unit="%"></output></div>
+      </div>
+    </div>
+
+    <div class="preview" id="preview">
+      <div class="frame" id="frame">
+        <canvas id="canvas" draggable="true" title="Glisse-moi vers un dossier pour créer le PNG"></canvas>
+      </div>
+    </div>
+
+    <footer class="exportbar">
+      <div class="dims" id="dims"></div>
+      <div class="tb-block">
+        <span class="tb-label">Qualité</span>
+        <div class="seg small" id="scaleSeg">
+          <button type="button" data-scale="1">1×</button>
+          <button type="button" data-scale="2">2×</button>
+          <button type="button" data-scale="3">3×</button>
+        </div>
+      </div>
+      <div class="tb-block folder">
+        <button type="button" class="ghost" id="folderBtn" title="Enregistrer directement dans un dossier">Dossier : <span id="folderName">Téléchargements</span></button>
+        <button type="button" class="link" id="folderReset" hidden title="Revenir aux Téléchargements">×</button>
+      </div>
+      <button type="button" class="ghost" id="copyBtn" title="Ctrl+Maj+C">Copier</button>
+      <button type="button" class="primary" id="exportBtn" title="Ctrl+S">Exporter PNG</button>
+    </footer>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="assets/app.js"></script>
+</body>
+</html>
